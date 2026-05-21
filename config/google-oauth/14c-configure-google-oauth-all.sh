@@ -13,17 +13,32 @@ chmod 700 "$SECRETS_DIR"
 
 [[ -f "$USERS_ENV" ]] || { echo "❌ users.env yok: $USERS_ENV"; exit 1; }
 source "$USERS_ENV"
-[[ -f "$GOOGLE_ENV" ]] && source "$GOOGLE_ENV"
 [[ -f "$LEGACY_OAUTH_ENV" ]] && source "$LEGACY_OAUTH_ENV"
+[[ -f "$GOOGLE_ENV" ]] && source "$GOOGLE_ENV"
 
 ask_visible_if_missing(){
-  local var="$1" prompt="$2" current="${!var:-}"
+  local var="$1"
+  local prompt="$2"
+  local current=""
+
+  if [[ ! "$var" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "❌ Geçersiz değişken adı: $var"
+    exit 1
+  fi
+
+  # Bash'te `local var=... current=${!var:-}` aynı satırda kullanılırsa
+  # expansion, `var` set edilmeden önce çalışabilir ve `invalid indirect expansion` verir.
+  current="${!var-}"
+
   if [[ -n "$current" ]]; then
     echo "✅ $var mevcut, tekrar sorulmayacak."
     return 0
   fi
+
   local value=""
-  while [[ -z "$value" ]]; do read -r -p "$prompt: " value; done
+  while [[ -z "$value" ]]; do
+    read -r -p "$prompt: " value
+  done
   printf -v "$var" '%s' "$value"
 }
 
@@ -34,13 +49,13 @@ if [[ -z "${GOOGLE_AUTO_REGISTER:-}" ]]; then
   if [[ "${AUTO_REGISTER:-N}" =~ ^[Yy]$ ]]; then GOOGLE_AUTO_REGISTER="true"; else GOOGLE_AUTO_REGISTER="false"; fi
 fi
 
-cat > "$GOOGLE_ENV" <<ENV
-GOOGLE_CLIENT_ID='${GOOGLE_CLIENT_ID}'
-GOOGLE_CLIENT_SECRET='${GOOGLE_CLIENT_SECRET}'
-GOOGLE_ISSUER_URL='https://accounts.google.com'
-GOOGLE_SCOPE='openid email profile'
-GOOGLE_AUTO_REGISTER='${GOOGLE_AUTO_REGISTER}'
-ENV
+{
+  printf 'GOOGLE_CLIENT_ID=%q\n' "$GOOGLE_CLIENT_ID"
+  printf 'GOOGLE_CLIENT_SECRET=%q\n' "$GOOGLE_CLIENT_SECRET"
+  printf 'GOOGLE_ISSUER_URL=%q\n' 'https://accounts.google.com'
+  printf 'GOOGLE_SCOPE=%q\n' 'openid email profile'
+  printf 'GOOGLE_AUTO_REGISTER=%q\n' "$GOOGLE_AUTO_REGISTER"
+} > "$GOOGLE_ENV"
 chmod 600 "$GOOGLE_ENV"
 ln -sf "$GOOGLE_ENV" "$LEGACY_OAUTH_ENV" 2>/dev/null || true
 echo "✅ Google OAuth secret kaydedildi: $GOOGLE_ENV"
